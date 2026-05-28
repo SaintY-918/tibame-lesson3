@@ -1,20 +1,85 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+# Shown to AI when creating any OpenSpec artifact in this repo.
+context: |
+  ## Project
+  Vehicle Management System (VMS, 車輛管理系統)：公司內部使用的車輛 asset 管理工具。
+  封閉內網、單一 Postgres、單一 API 伺服器、無外部使用者。團隊規模小（1–2 人）。
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  ## Tech stack
+  - Monorepo：npm workspaces，Node ≥ 20，ESM only（import path 一律帶 `.js` 後綴）。
+  - `apps/api`：Express 4 + Prisma 6 + Postgres 16。tsx watch dev、ts-jest ESM 測試（maxWorkers=1，共用 dev DB），supertest 打 HTTP。
+  - `apps/web`：Vite + React 18 + TypeScript + shadcn/ui + Tailwind + TanStack Query/Table + React Hook Form + Zustand + React Router 7。測試用 Vitest + React Testing Library + jsdom。
+  - `packages/shared`（`@vms/shared`）：zod schema、推導 type、`ApiErrorCode` taxonomy 與 `apiError()` helper。前後端共用，**不准雙邊重複定義 schema 或 error code**。
+  - 本地基建：`docker-compose.yml` 起 `db`（Postgres）與 `pgadmin`（5050）。Prisma 直接打 dev DB；目前沒有獨立的 test DB。
+
+  ## Domain
+  - 兩個核心 entity：`Employee`（含登入帳號、role、status）與 `Vehicle`（可選 `ownerId` 指向員工）。
+  - 角色僅 `ADMIN` 與 `USER`。**不開放自助註冊**——所有員工帳號由 admin 在「員工管理」建立。
+  - Employee 不做 hard delete，離職改 `status = INACTIVE`（API 對 `DELETE /api/employees/:id` 回 `405 METHOD_NOT_ALLOWED`）。
+  - Vehicle 端點對 USER 自動以 `ownerId = req.user.employeeId` 過濾；別人的車回 404（不洩漏存在）。
+  - 新增車輛指定 `ownerId` 時必須是 `status = ACTIVE` 的員工，否則 `400 INVALID_OWNER`。
+  - PATCH `/api/employees/:id` 禁止把自己降為 USER：`CANNOT_DEMOTE_SELF`。
+
+  ## Auth / security pattern
+  - JWT 放在 httpOnly cookie `vms_token`（SameSite=Lax，prod 才加 Secure）。
+  - CSRF token = HMAC-SHA256(JWT, COOKIE_SECRET)，登入時隨 response body 回給前端，前端放在 Zustand store，所有 mutating request 透過 `X-CSRF-Token` header 回送；後端 `csrfGuard` 對非 mutating 與 `/api/auth/login` 放行。
+  - `requireAuth` → `requireAdmin` 兩層 middleware；employee 端點整段都掛 admin。
+  - bcrypt cost 10；連續 5 次失敗鎖 15 分鐘（`lockedUntil`）。
+
+  ## Error format
+  所有錯誤一律走 `apps/api/src/middleware/error.ts`，輸出：
+    `{ "error": { "code": <ApiErrorCode>, "message": string, "details"?: unknown } }`
+  - `HttpError(status, code, message, details?)`：路由內 throw。
+  - `ZodError` → 400 `VALIDATION_ERROR`，details = `err.flatten()`。
+  - 新增任何 error code **必須先加到 `packages/shared/src/errors.ts` 的 `ApiErrorCode` union**，再於後端使用、由前端 `apiClient` 解包成 `ApiError`。
+
+  ## API conventions
+  - 路由前綴 `/api/<resource>`，list endpoint 都帶 pagination（`page`、`pageSize`、`total`、`totalPages`），預設 `pageSize=20`，不能拉全表。
+  - Query 用 zod schema 驗證（`employeeListQuerySchema`、`vehicleListQuerySchema` …），統一在 `@vms/shared` 維護。
+  - 唯一鍵衝突一律走 `Prisma P2002` → 409，欄位放在 `details.field`。
+
+  ## Frontend conventions
+  - 路由：`/login`、`/`（dashboard）、`/vehicles`、`/employees`（admin 限定，由 `<RequireAdmin>` 守）。
+  - 資料層：TanStack Query 管 server state，React Hook Form + zodResolver 管表單，用的 schema 直接從 `@vms/shared` import。
+  - UI：shadcn/ui + Tailwind；圖表用 Recharts。介面語言是繁體中文，無 i18n。
+
+  ## Testing conventions
+  - API：jest + supertest，covering 認證、CSRF、角色授權的關鍵路徑。共用 `src/test/setup.ts` 的 `resetDb()` 與 `src/test/helpers.ts` 的 `loginAs()` / `withAuth()`。
+  - Web：Vitest + RTL；至少覆蓋登入頁、列表過濾、admin-only route guard。
+  - Pre-commit (husky) 會平行跑 `npm run lint` + `npm test`，兩邊都要綠。不要 `--no-verify`。
+
+  ## Writing conventions（套用到 proposal / design / tasks / spec deltas）
+  - 全文以 **繁體中文** 撰寫；技術名詞首次出現附英文與簡短中文釋義，例如：`Monorepo (單一程式碼庫)`、`pagination (分頁)`、`CSRF (Cross-Site Request Forgery，跨站請求偽造)`。
+  - Markdown 標題採雙語：`## Why（動機）`、`## What Changes（變更內容）`、`## Goals / Non-Goals（目標／非目標）`、`## Decisions（決策）`、`## Impact（影響範圍）`。
+  - Decisions 段落每條給 **理由** 與 **替代方案**。
+  - Proposal 必含 `Non-goals`。Tasks 採 `N.M [ ]` 樹狀編號，依 capability 分段。
+  - Conventional commits，subject 用繁體中文：`feat(api): …`、`docs(openspec): …`、`fix(web): …`、`chore: …`。
+
+  ## Non-goals（整個 repo 層級）
+  Multi-tenant、SSO／第三方登入、保養／保險／油耗模組、生產環境部署（CI/CD、IaC、TLS、CDN）、i18n、頭像上傳、稽核日誌資料表。新提案若觸及這些，請先在 proposal 的 Non-goals 明確標示「本 change 不處理」。
+
+# Per-artifact rules — applied to specific artifact types when generating them.
+rules:
+  proposal:
+    - 用 Why / What Changes / Capabilities / Impact 四段結構；Capabilities 區分 `New Capabilities` 與 `Modified Capabilities`。
+    - 必含 Non-goals（即使只是「本 change 不處理 X、Y」一行）。
+    - 標題雙語、術語首次出現加英文與中文釋義。
+    - Impact 段落務必列出：新檔案／結構、依賴新增（按 workspace 拆）、新增環境變數、新增資料庫 migration、API 路由前綴、前端路由、測試覆蓋面。
+
+  design:
+    - 用 Context / Goals / Non-Goals / Decisions / Risks 結構。
+    - 每個 Decision 都寫「理由」與「替代方案」；替代方案要說明為什麼沒選。
+    - 涉及角色／資料範圍授權時，明確標示 role-aware 行為（例如「USER 只看 `ownerId = self`」）。
+    - 若引入新依賴，理由必須說明為何不靠現有 `@vms/shared` / Prisma / shadcn 已有的能力解決。
+
+  tasks:
+    - 採 `N. 區段標題（English）` + `N.M [ ] 任務` 格式，按 capability 或子系統分段。
+    - 每個任務應可一次提交完成（粗略 ≤ 半天）；過大就拆。
+    - 涉及 schema 變動的任務同段內必含「跑 `prisma migrate dev --name <slug>`」與「同步 `@vms/shared`」兩步。
+    - 新增 API 端點的任務同段內必含「對應的 jest + supertest 測試」與「驗證 401／403／404 路徑」。
+
+  spec:
+    - 用 Requirement / Scenario 結構撰寫，scenario 寫 Given / When / Then。
+    - 列出所有可能回傳的 `ApiErrorCode` 與對應 HTTP status；新 code 要同步加到 `packages/shared/src/errors.ts`。
+    - role-aware 行為（admin vs user 可見範圍）必須各別寫獨立 scenario。
