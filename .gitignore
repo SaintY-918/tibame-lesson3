@@ -1,6 +1,12 @@
 .DS_Store
 
 node_modules/
+dist/
+build/
+coverage/
+.env
+.env.local
+*.log
 
 # 統一由 .agents 管理，個人的設定不上傳
 .claude/
@@ -10,3 +16,13 @@ node_modules/
 
 # Skill 自動產生的時間戳備份
 .agents/backup/
+
+# Prisma 本地產物
+apps/api/prisma/migrations/dev.db*
+
+# Vite / Vitest
+apps/web/dist/
+apps/web/.vite/
+
+# pgAdmin local data
+.pgadmin/

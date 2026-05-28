@@ -26,6 +26,14 @@ export default [
     },
   },
   {
-    ignores: ["node_modules/", "coverage/"],
+    ignores: [
+      "node_modules/",
+      "coverage/",
+      "**/dist/",
+      "**/build/",
+      "**/.vite/",
+      "apps/**",
+      "packages/**",
+    ],
   },
 ];
