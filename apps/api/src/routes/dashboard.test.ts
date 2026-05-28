@@ -17,8 +17,8 @@ afterAll(async () => {
 describe("dashboard", () => {
   test("admin sees company-wide stats", async () => {
     await makeEmployee({ role: "ADMIN", username: "admin1" });
-    const u1 = await makeEmployee({ role: "USER", username: "u1", department: "A" });
-    const u2 = await makeEmployee({ role: "USER", username: "u2", department: "B" });
+    const u1 = await makeEmployee({ role: "USER", username: "u1", department: "資訊" });
+    const u2 = await makeEmployee({ role: "USER", username: "u2", department: "業務" });
     await makeVehicle({ ownerId: u1.id, status: "AVAILABLE" });
     await makeVehicle({ ownerId: u1.id, status: "MAINTENANCE" });
     await makeVehicle({ ownerId: u2.id, status: "AVAILABLE" });
@@ -47,8 +47,8 @@ describe("dashboard", () => {
     }>;
     expect(byDept).toEqual(
       expect.arrayContaining([
-        { department: "A", count: 2 },
-        { department: "B", count: 1 },
+        { department: "資訊", count: 2 },
+        { department: "業務", count: 1 },
         { department: "未指派", count: 1 },
       ]),
     );

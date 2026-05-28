@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { EMPLOYEE_STATUSES, ROLES } from "../types.js";
+import { DEPARTMENTS, EMPLOYEE_STATUSES, POSITIONS, ROLES } from "../types.js";
 
 const baseEmployeeFields = {
   employeeNo: z.string().min(1),
   name: z.string().min(1),
   email: z.string().email(),
-  department: z.string().min(1),
-  position: z.string().min(1),
+  department: z.enum(DEPARTMENTS),
+  position: z.enum(POSITIONS),
   hiredAt: z.coerce.date(),
   phone: z.string().min(1),
 };
@@ -26,8 +26,8 @@ export const updateEmployeeSchema = z
     employeeNo: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
     email: z.string().email().optional(),
-    department: z.string().min(1).optional(),
-    position: z.string().min(1).optional(),
+    department: z.enum(DEPARTMENTS).optional(),
+    position: z.enum(POSITIONS).optional(),
     hiredAt: z.coerce.date().optional(),
     phone: z.string().min(1).optional(),
     username: z.string().min(1).optional(),

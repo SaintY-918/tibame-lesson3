@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import type { Role } from "@vms/shared";
+import type { Department, Role } from "@vms/shared";
 import { prisma } from "../db/prisma.js";
 
 let seq = 0;
@@ -9,7 +9,7 @@ interface MakeEmployeeOptions {
   status?: "ACTIVE" | "INACTIVE";
   username?: string;
   password?: string;
-  department?: string;
+  department?: Department;
 }
 
 export async function makeEmployee(opts: MakeEmployeeOptions = {}) {
@@ -49,7 +49,7 @@ export async function makeVehicle(
       make: "Toyota",
       model: "Corolla",
       year: 2024,
-      color: "white",
+      color: "白",
       status: overrides.status ?? "AVAILABLE",
       mileage: overrides.mileage ?? 1000,
       purchasedAt: overrides.purchasedAt ?? new Date("2024-06-01"),
