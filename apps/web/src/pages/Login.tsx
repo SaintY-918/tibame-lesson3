@@ -2,13 +2,16 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
+import { Car, ShieldCheck } from "lucide-react";
 import { loginSchema, type LoginInput } from "@vms/shared";
 import { ApiError, apiClient } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { BorderBeam } from "@/components/magicui/border-beam";
+import { AnimatedGradientText } from "@/components/magicui/animated-gradient-text";
 
 function describeError(err: ApiError): string {
   switch (err.code) {
@@ -51,10 +54,22 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>登入 VMS</CardTitle>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-mesh animate-aurora" />
+      <Card className="relative w-full max-w-md overflow-hidden border-border/60 bg-card/70 shadow-card-lift backdrop-blur-xl">
+        <BorderBeam size={260} duration={12} />
+        <CardHeader className="space-y-3 pb-2 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-gradient text-white shadow-glow">
+            <Car className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              登入 <AnimatedGradientText>VMS</AnimatedGradientText>
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Vehicle Management System・內部車隊管理平台
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -82,9 +97,17 @@ export function LoginPage() {
                 {serverError}
               </p>
             )}
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              登入
+            <Button
+              type="submit"
+              className="w-full bg-brand-gradient text-white shadow-glow transition-transform hover:scale-[1.01] hover:opacity-95"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "登入中…" : "登入"}
             </Button>
+            <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+              <ShieldCheck className="h-3 w-3" />
+              採 JWT + CSRF 雙重保護
+            </p>
           </form>
         </CardContent>
       </Card>

@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import {
   createEmployeeSchema,
   resetPasswordSchema,
   type CreateEmployeeInput,
   type ResetPasswordInput,
+  DEPARTMENTS,
   EMPLOYEE_STATUSES,
   type EmployeeStatus,
+  POSITIONS,
   ROLES,
   type Role,
 } from "@vms/shared";
@@ -44,6 +47,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+const STATUS_LABELS: Record<EmployeeStatus, string> = {
+  ACTIVE: "在職",
+  INACTIVE: "離職",
+};
+
+const STATUS_BADGE: Record<EmployeeStatus, string> = {
+  ACTIVE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
+  INACTIVE: "bg-muted text-muted-foreground",
+};
+
+const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: "管理員",
+  USER: "一般使用者",
+};
+
 interface EmployeeRow {
   id: string;
   employeeNo: string;
@@ -69,7 +87,7 @@ interface Page<T> {
 export function EmployeesPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [department, setDepartment] = useState("");
+  const [department, setDepartment] = useState<"" | (typeof DEPARTMENTS)[number]>("");
   const [status, setStatus] = useState<"ALL" | EmployeeStatus>("ACTIVE");
   const [page, setPage] = useState(1);
 
@@ -93,9 +111,14 @@ export function EmployeesPage() {
   const [resetting, setResetting] = useState<EmployeeRow | null>(null);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-end gap-2">
-        <div className="flex-1 max-w-xs">
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">員工管理</h1>
+        <p className="text-sm text-muted-foreground">維護員工資料、部門、角色與帳號狀態。</p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card/70 p-3 backdrop-blur-sm">
+        <div className="flex-1 min-w-[200px] max-w-xs">
           <Label htmlFor="search">搜尋</Label>
           <Input
             id="search"
@@ -105,12 +128,25 @@ export function EmployeesPage() {
           />
         </div>
         <div className="w-40">
-          <Label htmlFor="dept">部門</Label>
-          <Input
-            id="dept"
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-          />
+          <Label>部門</Label>
+          <Select
+            value={department || "ALL"}
+            onValueChange={(v) =>
+              setDepartment(v === "ALL" ? "" : (v as (typeof DEPARTMENTS)[number]))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">全部部門</SelectItem>
+              {DEPARTMENTS.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="w-40">
           <Label>狀態</Label>
@@ -129,13 +165,18 @@ export function EmployeesPage() {
           </Select>
         </div>
         <div className="flex-1" />
-        <Button onClick={() => setEditing("new")}>新增員工</Button>
+        <Button
+          onClick={() => setEditing("new")}
+          className="bg-brand-gradient text-white shadow-glow hover:opacity-95"
+        >
+          新增員工
+        </Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="overflow-hidden rounded-xl border bg-card/70 backdrop-blur-sm">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-muted/40">
               <TableHead>工號</TableHead>
               <TableHead>姓名</TableHead>
               <TableHead>Email</TableHead>
@@ -148,17 +189,37 @@ export function EmployeesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {list.data?.items.map((e) => (
-              <TableRow key={e.id}>
-                <TableCell>{e.employeeNo}</TableCell>
+            {list.data?.items.map((e, idx) => (
+              <TableRow
+                key={e.id}
+                className="row-in transition hover:-translate-y-px hover:shadow-card-lift"
+                style={{ animationDelay: `${Math.min(idx, 20) * 30}ms` }}
+              >
+                <TableCell className="font-medium">{e.employeeNo}</TableCell>
                 <TableCell>{e.name}</TableCell>
-                <TableCell>{e.email}</TableCell>
+                <TableCell className="text-muted-foreground">{e.email}</TableCell>
                 <TableCell>{e.department}</TableCell>
                 <TableCell>{e.position}</TableCell>
                 <TableCell>{e.hiredAt.slice(0, 10)}</TableCell>
-                <TableCell>{e.status}</TableCell>
-                <TableCell>{e.role}</TableCell>
-                <TableCell className="text-right space-x-2">
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[e.status]}`}
+                  >
+                    {STATUS_LABELS[e.status]}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      e.role === "ADMIN"
+                        ? "bg-brand-gradient-soft text-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {ROLE_LABELS[e.role]}
+                  </span>
+                </TableCell>
+                <TableCell className="space-x-2 text-right">
                   <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
                     編輯
                   </Button>
@@ -170,7 +231,7 @@ export function EmployeesPage() {
             ))}
             {list.data && list.data.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                   尚無員工
                 </TableCell>
               </TableRow>
@@ -180,7 +241,7 @@ export function EmployeesPage() {
       </div>
 
       {list.data && (
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -215,10 +276,7 @@ export function EmployeesPage() {
       )}
 
       {resetting && (
-        <ResetPasswordDialog
-          employee={resetting}
-          onClose={() => setResetting(null)}
-        />
+        <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
       )}
     </div>
   );
@@ -236,19 +294,24 @@ function EmployeeSheet({
   const isNew = editing === "new";
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
-    setError,
   } = useForm<CreateEmployeeInput>({
     resolver: isNew ? zodResolver(createEmployeeSchema) : undefined,
     defaultValues: isNew
-      ? { role: "USER", status: "ACTIVE" }
+      ? {
+          role: "USER",
+          status: "ACTIVE",
+          department: DEPARTMENTS[0],
+          position: POSITIONS[5],
+        }
       : {
           employeeNo: (editing as EmployeeRow).employeeNo,
           name: (editing as EmployeeRow).name,
           email: (editing as EmployeeRow).email,
-          department: (editing as EmployeeRow).department,
-          position: (editing as EmployeeRow).position,
+          department: (editing as EmployeeRow).department as (typeof DEPARTMENTS)[number],
+          position: (editing as EmployeeRow).position as (typeof POSITIONS)[number],
           hiredAt: new Date((editing as EmployeeRow).hiredAt),
           phone: (editing as EmployeeRow).phone,
           username: (editing as EmployeeRow).username,
@@ -261,42 +324,40 @@ function EmployeeSheet({
     try {
       if (isNew) {
         await apiClient.post("/employees", values);
+        toast.success(`已新增員工 ${values.name}`);
       } else {
         const { initialPassword: _ip, ...rest } = values;
         await apiClient.patch(`/employees/${(editing as EmployeeRow).id}`, rest);
+        toast.success(`已更新員工 ${values.name}`);
       }
       onSuccess();
     } catch (err) {
-      if (err instanceof ApiError) setError("root", { message: err.message });
+      toast.error(err instanceof ApiError ? err.message : "操作失敗");
     }
   });
 
+  const textFields = [
+    { name: "employeeNo", label: "員工編號", type: "text" },
+    { name: "name", label: "姓名", type: "text" },
+    { name: "email", label: "Email", type: "email" },
+    { name: "hiredAt", label: "入職日期", type: "date" },
+    { name: "phone", label: "電話", type: "text" },
+    { name: "username", label: "帳號", type: "text" },
+  ] as const;
+
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="max-w-2xl">
+      <SheetContent className="max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isNew ? "新增員工" : `編輯 ${(editing as EmployeeRow).name}`}</SheetTitle>
+          <SheetTitle>
+            {isNew ? "新增員工" : `編輯 ${(editing as EmployeeRow).name}`}
+          </SheetTitle>
         </SheetHeader>
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-          {(
-            [
-              { name: "employeeNo", label: "員工編號", type: "text" },
-              { name: "name", label: "姓名", type: "text" },
-              { name: "email", label: "Email", type: "email" },
-              { name: "department", label: "部門", type: "text" },
-              { name: "position", label: "職位", type: "text" },
-              { name: "hiredAt", label: "入職日期", type: "date" },
-              { name: "phone", label: "電話", type: "text" },
-              { name: "username", label: "帳號", type: "text" },
-            ] as const
-          ).map((f) => (
+        <form onSubmit={submit} className="mt-2 grid grid-cols-2 gap-3">
+          {textFields.map((f) => (
             <div key={f.name} className="space-y-1.5">
               <Label htmlFor={f.name}>{f.label}</Label>
-              <Input
-                id={f.name}
-                type={f.type}
-                {...register(f.name as "name")}
-              />
+              <Input id={f.name} type={f.type} {...register(f.name as "name")} />
               {errors[f.name as keyof CreateEmployeeInput] && (
                 <p className="text-xs text-destructive">
                   {(errors[f.name as keyof CreateEmployeeInput] as { message?: string })?.message}
@@ -304,6 +365,22 @@ function EmployeeSheet({
               )}
             </div>
           ))}
+
+          <EnumField
+            control={control}
+            name="department"
+            label="部門"
+            options={DEPARTMENTS}
+            error={errors.department?.message}
+          />
+          <EnumField
+            control={control}
+            name="position"
+            label="職位"
+            options={POSITIONS}
+            error={errors.position?.message}
+          />
+
           {isNew && (
             <div className="space-y-1.5">
               <Label htmlFor="initialPassword">初始密碼（≥ 8 字元）</Label>
@@ -317,46 +394,76 @@ function EmployeeSheet({
               )}
             </div>
           )}
-          <div className="space-y-1.5">
-            <Label>角色</Label>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              {...register("role")}
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>狀態</Label>
-            <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              {...register("status")}
-            >
-              {EMPLOYEE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === "ACTIVE" ? "在職" : "離職"}
-                </option>
-              ))}
-            </select>
-          </div>
-          {errors.root && (
-            <p className="col-span-2 text-sm text-destructive">{errors.root.message}</p>
-          )}
+
+          <EnumField
+            control={control}
+            name="role"
+            label="角色"
+            options={ROLES}
+            renderOption={(r) => ROLE_LABELS[r as Role]}
+            error={errors.role?.message}
+          />
+          <EnumField
+            control={control}
+            name="status"
+            label="狀態"
+            options={EMPLOYEE_STATUSES}
+            renderOption={(s) => STATUS_LABELS[s as EmployeeStatus]}
+            error={errors.status?.message}
+          />
+
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-brand-gradient text-white shadow-glow hover:opacity-95"
+            >
               {isNew ? "新增" : "儲存"}
             </Button>
           </div>
         </form>
       </SheetContent>
     </Sheet>
+  );
+}
+
+interface EnumFieldProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  control: any;
+  name: "department" | "position" | "role" | "status";
+  label: string;
+  options: readonly string[];
+  renderOption?: (v: string) => string;
+  error?: string;
+}
+
+function EnumField({ control, name, label, options, renderOption, error }: EnumFieldProps) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={name}>{label}</Label>
+      <Controller
+        control={control}
+        name={name}
+        render={({ field }) => (
+          <Select value={field.value ?? ""} onValueChange={field.onChange}>
+            <SelectTrigger id={name}>
+              <SelectValue placeholder={`選擇${label}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((o) => (
+                <SelectItem key={o} value={o}>
+                  {renderOption ? renderOption(o) : o}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
   );
 }
 
@@ -370,13 +477,18 @@ function ResetPasswordDialog({
   const reset = useMutation({
     mutationFn: (body: ResetPasswordInput) =>
       apiClient.post(`/employees/${employee.id}/reset-password`, body),
-    onSuccess: onClose,
+    onSuccess: () => {
+      toast.success(`已重設 ${employee.name} 的密碼`);
+      onClose();
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : "重設失敗");
+    },
   });
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    setError,
   } = useForm<ResetPasswordInput>({ resolver: zodResolver(resetPasswordSchema) });
 
   return (
@@ -386,13 +498,7 @@ function ResetPasswordDialog({
           <DialogTitle>重設 {employee.name} 的密碼</DialogTitle>
         </DialogHeader>
         <form
-          onSubmit={handleSubmit(async (values) => {
-            try {
-              await reset.mutateAsync(values);
-            } catch (err) {
-              if (err instanceof ApiError) setError("root", { message: err.message });
-            }
-          })}
+          onSubmit={handleSubmit((values) => reset.mutate(values))}
           className="space-y-3"
         >
           <div className="space-y-1.5">
@@ -402,14 +508,15 @@ function ResetPasswordDialog({
               <p className="text-xs text-destructive">{errors.newPassword.message}</p>
             )}
           </div>
-          {errors.root && (
-            <p className="text-sm text-destructive">{errors.root.message}</p>
-          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-brand-gradient text-white shadow-glow hover:opacity-95"
+            >
               送出
             </Button>
           </div>

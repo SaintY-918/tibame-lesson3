@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import {
   createVehicleSchema,
   type CreateVehicleInput,
+  VEHICLE_COLORS,
+  VEHICLE_MAKES,
   VEHICLE_STATUSES,
   type VehicleStatus,
 } from "@vms/shared";
@@ -45,6 +48,18 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const STATUS_LABELS: Record<VehicleStatus, string> = {
+  AVAILABLE: "可用",
+  MAINTENANCE: "維修中",
+  RETIRED: "報廢",
+};
+
+const STATUS_BADGE: Record<VehicleStatus, string> = {
+  AVAILABLE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300",
+  MAINTENANCE: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
+  RETIRED: "bg-rose-500/15 text-rose-600 dark:text-rose-300",
+};
+
 interface VehicleRow {
   id: string;
   plate: string;
@@ -58,6 +73,12 @@ interface VehicleRow {
   ownerId: string | null;
 }
 
+interface EmployeeOption {
+  id: string;
+  name: string;
+  employeeNo: string;
+}
+
 interface Page<T> {
   items: T[];
   page: number;
@@ -66,6 +87,8 @@ interface Page<T> {
   totalPages: number;
 }
 
+const OWNER_NONE = "__NONE__";
+
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -73,6 +96,20 @@ function useDebounced<T>(value: T, ms = 300): T {
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
+}
+
+function useActiveEmployees(enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: ["employees", "lookup-active"],
+    queryFn: async () => {
+      const { data } = await apiClient.get<Page<EmployeeOption>>("/employees", {
+        params: { status: "ACTIVE", pageSize: 100 },
+      });
+      return data.items;
+    },
+    staleTime: 60_000,
+  });
 }
 
 export function VehiclesPage() {
@@ -95,21 +132,44 @@ export function VehiclesPage() {
     },
   });
 
+  const employees = useActiveEmployees(isAdmin);
+  const ownerMap = useMemo(() => {
+    const m = new Map<string, EmployeeOption>();
+    employees.data?.forEach((e) => m.set(e.id, e));
+    return m;
+  }, [employees.data]);
+
+  const describeOwner = (ownerId: string | null) => {
+    if (!ownerId) return "—";
+    if (!isAdmin) return user?.name ?? "本人";
+    const e = ownerMap.get(ownerId);
+    return e ? `${e.name}（${e.employeeNo}）` : ownerId.slice(0, 8) + "…";
+  };
+
   const [editing, setEditing] = useState<VehicleRow | "new" | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<VehicleRow | null>(null);
 
   const remove = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/vehicles/${id}`),
     onSuccess: () => {
+      toast.success("車輛已刪除");
       setConfirmDelete(null);
       qc.invalidateQueries({ queryKey: ["vehicles"] });
+    },
+    onError: (err) => {
+      toast.error(err instanceof ApiError ? err.message : "刪除失敗");
     },
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-end gap-2">
-        <div className="flex-1 max-w-xs">
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">車輛管理</h1>
+        <p className="text-sm text-muted-foreground">維護車輛資料、狀態、負責人員與里程紀錄。</p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card/70 p-3 backdrop-blur-sm">
+        <div className="flex-1 min-w-[200px] max-w-xs">
           <Label htmlFor="search">搜尋</Label>
           <Input
             id="search"
@@ -131,24 +191,32 @@ export function VehiclesPage() {
               <SelectItem value="ALL">全部</SelectItem>
               {VEHICLE_STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {s}
+                  {STATUS_LABELS[s]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex-1" />
-        {isAdmin && <Button onClick={() => setEditing("new")}>新增車輛</Button>}
+        {isAdmin && (
+          <Button
+            onClick={() => setEditing("new")}
+            className="bg-brand-gradient text-white shadow-glow hover:opacity-95"
+          >
+            新增車輛
+          </Button>
+        )}
       </div>
 
-      <div className="rounded-md border">
+      <div className="overflow-hidden rounded-xl border bg-card/70 backdrop-blur-sm">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-muted/40">
               <TableHead>車牌</TableHead>
               <TableHead>廠牌</TableHead>
               <TableHead>車型</TableHead>
               <TableHead>年份</TableHead>
+              <TableHead>顏色</TableHead>
               <TableHead>狀態</TableHead>
               <TableHead className="text-right">里程</TableHead>
               <TableHead>購買日</TableHead>
@@ -157,18 +225,33 @@ export function VehiclesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {list.data?.items.map((v) => (
-              <TableRow key={v.id}>
+            {list.data?.items.map((v, idx) => (
+              <TableRow
+                key={v.id}
+                className="row-in transition hover:-translate-y-px hover:shadow-card-lift"
+                style={{ animationDelay: `${Math.min(idx, 20) * 30}ms` }}
+              >
                 <TableCell className="font-medium">{v.plate}</TableCell>
                 <TableCell>{v.make}</TableCell>
                 <TableCell>{v.model}</TableCell>
                 <TableCell>{v.year}</TableCell>
-                <TableCell>{v.status}</TableCell>
-                <TableCell className="text-right">{v.mileage.toLocaleString()}</TableCell>
+                <TableCell>{v.color}</TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[v.status]}`}
+                  >
+                    {STATUS_LABELS[v.status]}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {v.mileage.toLocaleString()}
+                </TableCell>
                 <TableCell>{v.purchasedAt.slice(0, 10)}</TableCell>
-                <TableCell>{v.ownerId ?? "—"}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {describeOwner(v.ownerId)}
+                </TableCell>
                 {isAdmin && (
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="space-x-2 text-right">
                     <Button size="sm" variant="outline" onClick={() => setEditing(v)}>
                       編輯
                     </Button>
@@ -185,7 +268,7 @@ export function VehiclesPage() {
             ))}
             {list.data && list.data.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 9 : 8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isAdmin ? 10 : 9} className="py-12 text-center text-muted-foreground">
                   尚無車輛
                 </TableCell>
               </TableRow>
@@ -195,7 +278,7 @@ export function VehiclesPage() {
       </div>
 
       {list.data && (
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -221,6 +304,7 @@ export function VehiclesPage() {
       {isAdmin && editing !== null && (
         <VehicleSheet
           editing={editing}
+          employees={employees.data ?? []}
           onClose={() => setEditing(null)}
           onSuccess={() => {
             setEditing(null);
@@ -253,10 +337,12 @@ export function VehiclesPage() {
 
 function VehicleSheet({
   editing,
+  employees,
   onClose,
   onSuccess,
 }: {
   editing: VehicleRow | "new";
+  employees: EmployeeOption[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -267,14 +353,16 @@ function VehicleSheet({
         status: "AVAILABLE",
         year: new Date().getFullYear(),
         mileage: 0,
+        make: VEHICLE_MAKES[0],
+        color: VEHICLE_COLORS[0],
       };
     const v = editing as VehicleRow;
     return {
       plate: v.plate,
-      make: v.make,
+      make: v.make as (typeof VEHICLE_MAKES)[number],
       model: v.model,
       year: v.year,
-      color: v.color,
+      color: v.color as (typeof VEHICLE_COLORS)[number],
       status: v.status,
       mileage: v.mileage,
       purchasedAt: new Date(v.purchasedAt),
@@ -284,9 +372,9 @@ function VehicleSheet({
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
-    setError,
   } = useForm<CreateVehicleInput>({
     resolver: zodResolver(createVehicleSchema),
     defaultValues,
@@ -294,38 +382,41 @@ function VehicleSheet({
 
   const submit = handleSubmit(async (values) => {
     try {
+      const payload = {
+        ...values,
+        ownerId: values.ownerId ? values.ownerId : null,
+      };
       if (isNew) {
-        await apiClient.post("/vehicles", values);
+        await apiClient.post("/vehicles", payload);
+        toast.success(`已新增車輛 ${values.plate}`);
       } else {
-        await apiClient.patch(`/vehicles/${(editing as VehicleRow).id}`, values);
+        await apiClient.patch(`/vehicles/${(editing as VehicleRow).id}`, payload);
+        toast.success(`已更新車輛 ${values.plate}`);
       }
       onSuccess();
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError("root", { message: err.message });
-      }
+      toast.error(err instanceof ApiError ? err.message : "操作失敗");
     }
   });
 
+  const textFields = [
+    { name: "plate", label: "車牌", type: "text" },
+    { name: "model", label: "車型", type: "text" },
+    { name: "year", label: "年份", type: "number" },
+    { name: "mileage", label: "里程數", type: "number" },
+    { name: "purchasedAt", label: "購買日期", type: "date" },
+  ] as const;
+
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="max-w-2xl">
+      <SheetContent className="max-w-2xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isNew ? "新增車輛" : `編輯 ${(editing as VehicleRow).plate}`}</SheetTitle>
+          <SheetTitle>
+            {isNew ? "新增車輛" : `編輯 ${(editing as VehicleRow).plate}`}
+          </SheetTitle>
         </SheetHeader>
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3">
-          {(
-            [
-              { name: "plate", label: "車牌", type: "text" },
-              { name: "make", label: "廠牌", type: "text" },
-              { name: "model", label: "車型", type: "text" },
-              { name: "year", label: "年份", type: "number" },
-              { name: "color", label: "顏色", type: "text" },
-              { name: "mileage", label: "里程數", type: "number" },
-              { name: "purchasedAt", label: "購買日期", type: "date" },
-              { name: "ownerId", label: "負責員工 id（可留空）", type: "text" },
-            ] as const
-          ).map((f) => (
+        <form onSubmit={submit} className="mt-2 grid grid-cols-2 gap-3">
+          {textFields.map((f) => (
             <div key={f.name} className="space-y-1.5">
               <Label htmlFor={f.name}>{f.label}</Label>
               <Input
@@ -342,33 +433,107 @@ function VehicleSheet({
               )}
             </div>
           ))}
-          <div className="space-y-1.5">
-            <Label htmlFor="status">狀態</Label>
-            <select
-              id="status"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              {...register("status")}
-            >
-              {VEHICLE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+          <FormSelect
+            control={control}
+            name="make"
+            label="廠牌"
+            options={VEHICLE_MAKES}
+            error={errors.make?.message}
+          />
+          <FormSelect
+            control={control}
+            name="color"
+            label="顏色"
+            options={VEHICLE_COLORS}
+            error={errors.color?.message}
+          />
+          <FormSelect
+            control={control}
+            name="status"
+            label="狀態"
+            options={VEHICLE_STATUSES}
+            renderOption={(s) => STATUS_LABELS[s as VehicleStatus]}
+            error={errors.status?.message}
+          />
+          <div className="space-y-1.5 col-span-2">
+            <Label htmlFor="ownerId">負責員工</Label>
+            <Controller
+              control={control}
+              name="ownerId"
+              render={({ field }) => (
+                <Select
+                  value={field.value ? field.value : OWNER_NONE}
+                  onValueChange={(v) => field.onChange(v === OWNER_NONE ? null : v)}
+                >
+                  <SelectTrigger id="ownerId">
+                    <SelectValue placeholder="選擇負責員工" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={OWNER_NONE}>未指派</SelectItem>
+                    {employees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}（{e.employeeNo}）
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.ownerId?.message && (
+              <p className="text-xs text-destructive">{errors.ownerId.message}</p>
+            )}
           </div>
-          {errors.root && (
-            <p className="col-span-2 text-sm text-destructive">{errors.root.message}</p>
-          )}
           <div className="col-span-2 flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-brand-gradient text-white shadow-glow hover:opacity-95"
+            >
               {isNew ? "新增" : "儲存"}
             </Button>
           </div>
         </form>
       </SheetContent>
     </Sheet>
+  );
+}
+
+interface FormSelectProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  control: any;
+  name: "make" | "color" | "status";
+  label: string;
+  options: readonly string[];
+  error?: string;
+  renderOption?: (v: string) => string;
+}
+
+function FormSelect({ control, name, label, options, error, renderOption }: FormSelectProps) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={name}>{label}</Label>
+      <Controller
+        control={control}
+        name={name}
+        render={({ field }) => (
+          <Select value={field.value ?? ""} onValueChange={field.onChange}>
+            <SelectTrigger id={name}>
+              <SelectValue placeholder={`選擇${label}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((o) => (
+                <SelectItem key={o} value={o}>
+                  {renderOption ? renderOption(o) : o}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
   );
 }

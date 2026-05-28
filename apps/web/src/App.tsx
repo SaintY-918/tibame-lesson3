@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "sonner";
 import { useAuthStore } from "@/store/auth";
 import { apiClient } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
@@ -29,8 +30,10 @@ export function App() {
   if (!hydrated) return null;
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
+    <>
+      <Toaster position="top-right" richColors closeButton theme="system" />
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
       <Route
         element={
           <RequireAuth>
@@ -49,7 +52,8 @@ export function App() {
           }
         />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
