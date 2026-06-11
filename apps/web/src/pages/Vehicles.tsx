@@ -34,6 +34,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -415,6 +416,9 @@ function VehicleSheet({
           <SheetTitle>
             {isNew ? "新增車輛" : `編輯 ${(editing as VehicleRow).plate}`}
           </SheetTitle>
+          <SheetDescription className="sr-only">
+            填寫車輛資料後送出儲存
+          </SheetDescription>
         </SheetHeader>
         <form onSubmit={submit} className="mt-2 grid grid-cols-2 gap-3">
           {textFields.map((f) => (
