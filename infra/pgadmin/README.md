@@ -18,6 +18,8 @@
 3. 可以看到 `Employee` 與 `Vehicle` 兩張表
 4. 對著 table 按右鍵 → **View/Edit Data → All Rows** 即可查資料
 
+> 測試 DB `vms_test`（由 `npm test` 自動建立／重建）也在同一個 server 底下：展開 **Databases → vms_test** 即可觀察測試留下的資料。`pgpass` 的 DB 欄位是 `*`，連任一 DB 都免輸入密碼。
+
 ## 如果要手動建立 Server（萬一 servers.json 沒生效）
 
 按左側 Servers → 右鍵 → Register → Server，填：
