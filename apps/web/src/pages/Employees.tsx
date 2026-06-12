@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   createEmployeeSchema,
   resetPasswordSchema,
+  type CreateEmployeeFormInput,
   type CreateEmployeeInput,
   type ResetPasswordInput,
   DEPARTMENTS,
@@ -119,7 +120,7 @@ export function EmployeesPage() {
         <p className="text-sm text-muted-foreground">維護員工資料、部門、角色與帳號狀態。</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card/70 p-3 backdrop-blur-sm">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card/70 p-3 backdrop-blur-xs">
         <div className="flex-1 min-w-[200px] max-w-xs">
           <Label htmlFor="search">搜尋</Label>
           <Input
@@ -175,7 +176,7 @@ export function EmployeesPage() {
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card/70 backdrop-blur-sm">
+      <div className="overflow-hidden rounded-xl border bg-card/70 backdrop-blur-xs">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40">
@@ -299,7 +300,8 @@ function EmployeeSheet({
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<CreateEmployeeInput>({
+    // Zod 4：表單欄位用 input 型別（第一個泛型），resolver 驗證後的提交值為 output 型別（第三個泛型）。
+  } = useForm<CreateEmployeeFormInput, unknown, CreateEmployeeInput>({
     resolver: isNew ? zodResolver(createEmployeeSchema) : undefined,
     defaultValues: isNew
       ? {
@@ -315,7 +317,7 @@ function EmployeeSheet({
           department: (editing as EmployeeRow).department as (typeof DEPARTMENTS)[number],
           position: (editing as EmployeeRow).position as (typeof POSITIONS)[number],
           // date input 需要 YYYY-MM-DD 字串才能正確回填；提交時由 z.coerce.date() 轉回 Date。
-          hiredAt: (editing as EmployeeRow).hiredAt.slice(0, 10) as unknown as Date,
+          hiredAt: (editing as EmployeeRow).hiredAt.slice(0, 10),
           phone: (editing as EmployeeRow).phone,
           username: (editing as EmployeeRow).username,
           role: (editing as EmployeeRow).role,
