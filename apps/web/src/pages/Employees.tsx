@@ -37,12 +37,14 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -353,6 +355,9 @@ function EmployeeSheet({
           <SheetTitle>
             {isNew ? "新增員工" : `編輯 ${(editing as EmployeeRow).name}`}
           </SheetTitle>
+          <SheetDescription className="sr-only">
+            填寫員工資料後送出儲存
+          </SheetDescription>
         </SheetHeader>
         <form onSubmit={submit} className="mt-2 grid grid-cols-2 gap-3">
           {textFields.map((f) => (
@@ -497,6 +502,9 @@ function ResetPasswordDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>重設 {employee.name} 的密碼</DialogTitle>
+          <DialogDescription className="sr-only">
+            輸入新密碼後送出，立即更新該員工的登入密碼
+          </DialogDescription>
         </DialogHeader>
         <form
           onSubmit={handleSubmit((values) => reset.mutate(values))}
