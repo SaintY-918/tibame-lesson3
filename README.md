@@ -72,6 +72,31 @@ npm run dev:web   # 終端 B：Vite（:3087）
 
 ---
 
+## Production 部署（Docker）
+
+前後端各有一份多階段 Dockerfile（`apps/api/Dockerfile`、`apps/web/Dockerfile`）：build 階段用 `node:24-alpine` 安裝依賴並編譯，最終映像只保留執行所需檔案（api 為 `node:24-alpine` + 編譯後 JS 與 production 依賴；web 為 `nginx:alpine` + 靜態檔，並由 nginx 反向代理 `/api` 到內部 api 服務）。
+
+```bash
+cp .env.example .env   # 已有 .env 可跳過；JWT_SECRET / COOKIE_SECRET 務必換成隨機值
+docker compose -f docker-compose-prod.yml up -d --build
+```
+
+啟動順序由 compose 自動處理：`db`（healthcheck）→ `migrate`（一次性：`prisma migrate deploy` + seed admin，冪等）→ `api`（healthcheck `/api/health`）→ `web`。
+
+- 完成後開 **http://localhost:8080**（預設 admin 帳密讀 `.env` 的 `SEED_ADMIN_*`）。
+- **只有 web 對外開 port**（`8080:80`，可用 `WEB_PUBLISHED_PORT` 改）；api 與 db 只存在於內部網路 `vms-prod-net`，瀏覽器的 `/api` 請求由 nginx 代理進去，前後端同源、不經 CORS。
+- 機密由根目錄 `.env` 經 compose 變數替換注入 container，不會打包進 image（`.dockerignore` 已排除 `node_modules`、`.env`、`.git` 等）。
+- 與開發用 `docker-compose.yml` 互不相干：project 名稱（`vms-prod`）、network、volume（`vms_prod_pgdata`）都是獨立的，兩套可同時跑。
+
+```bash
+docker compose -f docker-compose-prod.yml logs -f api   # 看 api log
+docker compose -f docker-compose-prod.yml down          # 停止（加 -v 連資料庫 volume 一起刪）
+```
+
+> ⚠️ `NODE_ENV=production` 下 auth cookie 帶 `Secure` 旗標。瀏覽器把 `localhost` 視為安全環境所以本機測試沒問題；部署到真實主機時必須在前面加 HTTPS（TLS 終結），否則登入 cookie 不會生效。
+
+---
+
 ## 服務一覽
 
 | 服務 | URL | 帳密 / 備註 |
@@ -123,7 +148,8 @@ packages/
   shared/  兩邊共用的 zod schema、type、ApiError
 infra/
   pgadmin/ pgAdmin 啟動時自動載入的 servers.json + pgpass
-docker-compose.yml
+docker-compose.yml        # 開發用：db + pgadmin
+docker-compose-prod.yml   # production：db + api + web（只有 web 對外）
 openspec/  本專案的需求／設計／規格／任務（OpenSpec）
 ```
 
