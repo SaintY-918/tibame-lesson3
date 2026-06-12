@@ -41,6 +41,7 @@ npm test               # root jest, then per-workspace tests
 npm run test:root      # root-only jest (ignores apps/ and packages/)
 npm run db:migrate     # apps/api: prisma migrate dev
 npm run db:reset       # prisma migrate reset --force (Prisma still prompts)
+npm run db:test:reset  # rebuild the test DB (drop schema + migrate deploy on vms_test)
 npm run db:studio      # prisma studio on :5555
 npm run seed           # re-create the admin
 ```
@@ -49,7 +50,12 @@ Single test runs:
 - API: `cd apps/api && node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
 - Web: `cd apps/web && npx vitest run src/pages/Login.test.tsx`
 
-API tests share **one Postgres instance** (the dev DB). `jest.config.js` forces `maxWorkers: 1`; `src/test/setup.ts` exposes `resetDb()` which truncates `vehicle` + `employee`. Don't try to parallelize API tests, and don't point them at a separate test DB unless you also rework setup.
+API tests run against a **dedicated test DB** — `TEST_DATABASE_URL` in `.env` (default `vms_test`, same Postgres container as the dev `vms`). How it works:
+
+- `pretest` (`apps/api/scripts/setup-test-db.mjs`) drops the `public` schema and re-applies all migrations via `prisma migrate deploy`, so every `npm test` starts from a clean schema. It deliberately avoids `prisma migrate reset` (interactive + blocked for AI agents).
+- Jest `setupFiles` (`src/test/jest.env.ts`) overrides `DATABASE_URL` with `TEST_DATABASE_URL` before any module loads, so even direct single-file jest runs hit the test DB. Direct runs skip `pretest` — if `vms_test` doesn't exist yet, run `npm run db:test:reset` once.
+- Guard: both scripts refuse to run unless the test DB name contains `test`, so the dev DB can't be wiped by misconfiguration.
+- `jest.config.js` still forces `maxWorkers: 1` (one shared test DB) and `src/test/setup.ts` `resetDb()` truncates between tests — don't parallelize API tests. Because `resetDb()` runs in `beforeEach`, the last test's rows stay in `vms_test` and are inspectable in pgAdmin.
 
 ## Auth + CSRF (subtle)
 
