@@ -1,6 +1,6 @@
 # Vehicle Management System (VMS)
 
-內部車輛管理系統。Monorepo（npm workspaces），前端 Vite + React + shadcn/ui，後端 Express + Prisma + Postgres。
+內部車輛管理系統。Monorepo（npm / pnpm workspaces 雙支援），前端 Vite + React + shadcn/ui，後端 Express + Prisma + Postgres。
 
 ---
 
@@ -14,6 +14,38 @@ npm run db:migrate            # 建立 schema
 npm run seed                  # 建立第一個 admin（讀 .env 的 SEED_ADMIN_*）
 npm run seed:mock             # 選用：塞 30 員工 + 50 車輛模擬資料，方便看 dashboard / 分頁
 ```
+
+### 改用 pnpm 安裝（替代 npm）
+
+本專案同時支援 pnpm（≥ 10）。安裝方式擇一：`npm i -g pnpm` 或 `corepack enable pnpm`。
+
+```bash
+cp .env.example .env          # 同上，第一次先複製出來
+docker compose up -d
+pnpm install                  # 取代 npm install
+pnpm db:migrate
+pnpm seed
+```
+
+之後所有指令都可以用 `pnpm <script>` 執行（例：`pnpm dev`、`pnpm test`、`pnpm build`），效果與 `npm run <script>` 相同。
+
+pnpm 相關設定都在根目錄 `pnpm-workspace.yaml`：
+
+- `packages`：workspace 範圍（`apps/*`、`packages/*`，與 npm workspaces 對齊）。
+- `linkWorkspacePackages: true`：讓 `"@vms/shared": "*"` 這種寫法解析到 workspace 內的套件（pnpm 預設只認 `workspace:` 協定；開了這個設定才能與 npm 共用同一套 package.json）。
+- `onlyBuiltDependencies`：pnpm 10 預設不執行相依套件的 postinstall script，原生模組（bcrypt、esbuild、prisma engines、@tailwindcss/oxide…）已列入白名單。新增需要編譯的依賴時記得補進這個清單。
+
+注意事項：
+
+- 兩套 lockfile 並存（`package-lock.json` 給 npm、`pnpm-lock.yaml` 給 pnpm），改了任何 package.json 的依賴後，**兩邊都要重跑一次 install 讓 lockfile 同步**。
+- 同一份 checkout 請從頭到尾用同一套管理器；要從 npm 切到 pnpm（或反過來）時，先清掉所有 node_modules 再重裝：
+
+  ```bash
+  rm -rf node_modules apps/*/node_modules packages/*/node_modules
+  pnpm install   # 或 npm install
+  ```
+
+- CI 與 Husky pre-commit 仍以 npm 為準（`npm ci` / `npm test`）；pnpm 是本地開發的替代選項。
 
 ## 日常啟動
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Vehicle Management System (VMS), a Traditional-Chinese internal app. npm workspaces monorepo, Node ≥ 20, ESM throughout.
+Vehicle Management System (VMS), a Traditional-Chinese internal app. npm workspaces monorepo (pnpm ≥ 10 also supported — config in `pnpm-workspace.yaml`; dual lockfiles, keep both in sync when deps change), Node ≥ 20, ESM throughout.
 
 - `apps/api` — Express 5 + Prisma 7 + Postgres 16. `@vms/api`. Prisma client 由 `prisma generate` 產生到 `src/generated/prisma/`（gitignored；`db:migrate` 會順帶 generate，fresh clone 後需先跑一次才能過型別檢查）。datasource URL 在 `prisma.config.ts`（自行載入根目錄 `.env`），不在 schema.prisma。
 - `apps/web` — Vite + React 19 + Tailwind 4（CSS-first 設定在 `src/index.css`，無 tailwind.config.js）+ shadcn/ui + TanStack Query/Table + Zustand + React Router 7. `@vms/web`.
@@ -47,7 +47,7 @@ npm run seed           # re-create the admin
 ```
 
 Single test runs:
-- API: `cd apps/api && node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
+- API: `cd apps/api && NODE_OPTIONS=--experimental-vm-modules npx jest src/routes/auth.test.ts`
 - Web: `cd apps/web && npx vitest run src/pages/Login.test.tsx`
 
 API tests run against a **dedicated test DB** — `TEST_DATABASE_URL` in `.env` (default `vms_test`, same Postgres container as the dev `vms`). How it works:
