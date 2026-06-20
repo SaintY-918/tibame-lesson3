@@ -47,7 +47,7 @@ npm run seed           # re-create the admin
 ```
 
 Single test runs:
-- API: `cd apps/api && node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
+- API: `cd apps/api && dotenv -e .env.test -- node --experimental-vm-modules ../../node_modules/jest/bin/jest.js src/routes/auth.test.ts`
 - Web: `cd apps/web && npx vitest run src/pages/Login.test.tsx`
 
 API tests run against a **dedicated test DB** — `TEST_DATABASE_URL` in `.env` (default `vms_test`, same Postgres container as the dev `vms`). How it works:
