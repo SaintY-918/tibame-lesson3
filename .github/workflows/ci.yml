@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push: # 所有分支的 push 都觸發
+  workflow_dispatch: # 允許從 GitHub Actions 頁面手動觸發
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 第一關：Lint ──────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  # ── 第二關（平行）：API 測試 ──────────────────────────────────────────────
+  # pretest 呼叫 setup-test-db.mjs：drop/recreate schema + migrate deploy。
+  # globalSetup.cjs 載入 .env.test 取得 DATABASE_URL=vms_test，不需額外設定。
+  test-api:
+    name: API Tests (Jest + Coverage)
+    needs: lint
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vms
+          POSTGRES_PASSWORD: vms
+          POSTGRES_DB: vms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://vms:vms@localhost:5432/vms_test?schema=public
+      JWT_SECRET: ci-only-jwt-secret-not-for-production-use
+      COOKIE_SECRET: ci-only-cookie-secret-not-for-production
+      JWT_EXPIRES_IN: 8h
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: apps/api
+      - name: Run API tests with coverage
+        run: npm run test --workspace apps/api -- --coverage
+      - name: Upload API coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: apps/api/coverage
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ── 第二關（平行）：前端測試 ──────────────────────────────────────────────
+  test-web:
+    name: Web Tests (Vitest + Coverage)
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run web tests with coverage
+        run: npm run test --workspace apps/web -- --coverage
+      - name: Upload web coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: apps/web/coverage
+          if-no-files-found: warn
+          retention-days: 30
