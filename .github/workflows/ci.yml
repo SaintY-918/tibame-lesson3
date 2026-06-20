@@ -2,6 +2,7 @@ name: CI
 
 on:
   push: # 所有分支的 push 都觸發
+  workflow_dispatch: # 允許從 GitHub Actions 頁面手動觸發
 
 concurrency:
   group: ci-${{ github.ref }}
