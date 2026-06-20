@@ -46,5 +46,6 @@ try {
 const result = spawnSync("npx", ["prisma", "migrate", "deploy"], {
   stdio: "inherit",
   env: { ...process.env, DATABASE_URL: testUrl },
+  shell: true,
 });
 process.exit(result.status ?? 1);

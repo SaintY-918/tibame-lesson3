@@ -1,13 +1,17 @@
-// CJS 格式：Jest globalSetup 在獨立 context 執行，此時 ESM 尚未套用
-// DATABASE_URL 已由 dotenv-cli 注入 process.env（.env.test），prisma 直接讀取
+// CJS 格式：Jest globalSetup 在獨立 context 執行，此時 ESM 尚未套用。
+// 自行載入 .env（secrets）再以 .env.test 覆蓋 DATABASE_URL，使 prisma 指向 vms_test。
 const { execSync } = require("child_process");
 const path = require("path");
+const { configDotenv } = require("dotenv");
 
 const apiRoot = path.resolve(__dirname, "../..");
 const repoRoot = path.resolve(__dirname, "../../../..");
 const binPath = path.join(repoRoot, "node_modules", ".bin");
 
 module.exports = async function globalSetup() {
+  configDotenv({ path: path.resolve(repoRoot, ".env") });
+  configDotenv({ path: path.resolve(apiRoot, ".env.test"), override: true });
+
   const env = {
     ...process.env,
     PATH: `${binPath}${path.delimiter}${process.env.PATH ?? ""}`,
