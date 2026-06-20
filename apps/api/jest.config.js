@@ -1,5 +1,6 @@
 /** @type {import('jest').Config} */
 export default {
+  globalSetup: "<rootDir>/src/test/globalSetup.cjs",
   preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
   extensionsToTreatAsEsm: [".ts"],
@@ -18,6 +19,7 @@ export default {
     ],
   },
   testMatch: ["<rootDir>/src/**/*.test.ts"],
+  setupFiles: ["<rootDir>/src/test/jest.env.ts"],
   maxWorkers: 1,
   testTimeout: 15000,
 };

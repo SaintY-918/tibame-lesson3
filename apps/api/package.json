@@ -8,11 +8,13 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
+    "pretest": "npm run db:test:reset",
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:reset": "dotenv -e ../../.env -- prisma migrate reset --force",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "db:generate": "dotenv -e ../../.env -- prisma generate",
+    "db:test:reset": "node scripts/setup-test-db.mjs",
     "seed": "tsx src/db/seed.ts",
     "seed:mock": "tsx src/db/seed-mock.ts"
   },
