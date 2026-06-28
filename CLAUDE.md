@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Vehicle Management System (VMS), a Traditional-Chinese internal app. npm workspaces monorepo, Node ≥ 20, ESM throughout.
+Vehicle Management System (VMS), a Traditional-Chinese internal app. npm workspaces monorepo (pnpm ≥ 10 also supported — config in `pnpm-workspace.yaml`; dual lockfiles, keep both in sync when deps change), Node ≥ 20, ESM throughout.
 
-- `apps/api` — Express 4 + Prisma 6 + Postgres 16. `@vms/api`.
-- `apps/web` — Vite + React 18 + shadcn/ui + TanStack Query/Table + Zustand + React Router 7. `@vms/web`.
+- `apps/api` — Express 5 + Prisma 7 + Postgres 16. `@vms/api`. Prisma client 由 `prisma generate` 產生到 `src/generated/prisma/`（gitignored；`db:migrate` 會順帶 generate，fresh clone 後需先跑一次才能過型別檢查）。datasource URL 在 `prisma.config.ts`（自行載入根目錄 `.env`），不在 schema.prisma。
+- `apps/web` — Vite + React 19 + Tailwind 4（CSS-first 設定在 `src/index.css`，無 tailwind.config.js）+ shadcn/ui + TanStack Query/Table + Zustand + React Router 7. `@vms/web`.
 - `packages/shared` — `@vms/shared`. Zod schemas, shared types, `ApiError` taxonomy. Both ends import from here; do not duplicate schemas.
 - `infra/pgadmin` — pgAdmin auto-provisioning (`servers.json` + `pgpass` mounted read-only).
 - `openspec/` — change proposals, design, specs, and tasks. The archived `add-vehicle-management-system` change is the source of truth for current behavior. New work follows the OpenSpec workflow (`.cursor/skills/` and the `opsx:*` / `openspec-*` skills).
@@ -69,7 +69,7 @@ The API uses a JWT stored in an httpOnly `vms_token` cookie. The CSRF token is *
 
 All errors flow through `apps/api/src/middleware/error.ts`:
 - `HttpError(status, code, message, details?)` → JSON `{ error: { code, message, details } }` with that status.
-- `ZodError` → 400 `VALIDATION_ERROR` with `err.flatten()` in `details`.
+- `ZodError` → 400 `VALIDATION_ERROR` with `z.flattenError(err)` in `details`.
 - Everything else → 500 `INTERNAL_ERROR` (and `console.error` for the server log).
 
 The full code taxonomy lives in `packages/shared/src/errors.ts`. **Add new codes there**, not inline, so both ends stay in sync. The web `apiClient` interceptor unwraps server errors into a typed `ApiError` (`apps/web/src/lib/api.ts`).

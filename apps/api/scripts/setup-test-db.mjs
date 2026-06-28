@@ -6,9 +6,9 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
-import { PrismaClient } from "@prisma/client";
+import pg from "pg";
 
-dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env"), quiet: true });
 
 const testUrl = process.env.TEST_DATABASE_URL;
 if (!testUrl) {
@@ -24,22 +24,33 @@ if (!/test/i.test(dbName) || !/^[a-zA-Z0-9_]+$/.test(dbName)) {
   process.exit(1);
 }
 
+// Prisma 7 的 client 必須搭配 driver adapter，腳本改用 pg 直連最單純。
+async function withClient(url, fn) {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end();
+  }
+}
+
 // 1) 確保測試 DB 存在；存在則清空 schema，讓 migrate deploy 從零重建。
-const testDb = new PrismaClient({ datasourceUrl: testUrl });
 try {
-  await testDb.$executeRawUnsafe("DROP SCHEMA IF EXISTS public CASCADE");
-  await testDb.$executeRawUnsafe("CREATE SCHEMA public");
+  await withClient(testUrl, async (db) => {
+    await db.query("DROP SCHEMA IF EXISTS public CASCADE");
+    await db.query("CREATE SCHEMA public");
+  });
 } catch (err) {
-  if (/does not exist/.test(String(err?.message))) {
+  // 3D000 = invalid_catalog_name（資料庫不存在）
+  if (err?.code === "3D000" || /does not exist/.test(String(err?.message))) {
     // 測試 DB 還不存在 → 連開發 DB 建立它（CREATE DATABASE 無法在目標 DB 上執行）。
-    const admin = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
-    await admin.$executeRawUnsafe(`CREATE DATABASE "${dbName}"`);
-    await admin.$disconnect();
+    await withClient(process.env.DATABASE_URL, (admin) =>
+      admin.query(`CREATE DATABASE "${dbName}"`),
+    );
   } else {
     throw err;
   }
-} finally {
-  await testDb.$disconnect();
 }
 
 // 2) 套用所有 migrations（非破壞性，與正式 schema 流程一致）。

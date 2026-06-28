@@ -22,4 +22,11 @@ export default {
   setupFiles: ["<rootDir>/src/test/jest.env.ts"],
   maxWorkers: 1,
   testTimeout: 15000,
+  collectCoverageFrom: [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/test/**",
+    "!src/generated/**",
+  ],
+  coverageReporters: ["text", "html", "lcov"],
 };
