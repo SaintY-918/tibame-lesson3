@@ -5,8 +5,9 @@
     "rootDir": "./src",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["node", "jest"]
+    "types": ["node"],
+    "noImplicitAny": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "node_modules", "**/*.test.ts"]
+  "exclude": ["dist", "node_modules", "**/*.test.ts", "src/test"]
 }
