@@ -1,0 +1,16 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# 強制 pnpm 將 @vms/shared 解析為本地 workspace 套件而非 registry
+overrides:
+  '@vms/shared': 'workspace:*'
+
+# 允許需要執行 postinstall/build script 的套件
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  bcrypt: true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true

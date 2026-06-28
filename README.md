@@ -6,6 +6,9 @@
 
 ## 一次性安裝
 
+本專案支援 **npm** 與 **pnpm** 兩種套件管理器，擇一使用即可。
+
+**npm（預設）：**
 ```bash
 cp .env.example .env          # 第一次先複製出來、按需修改
 docker compose up -d          # 啟 db (Postgres) + pgadmin (5050)
@@ -14,6 +17,17 @@ npm run db:migrate            # 建立 schema
 npm run seed                  # 建立第一個 admin（讀 .env 的 SEED_ADMIN_*）
 npm run seed:mock             # 選用：塞 30 員工 + 50 車輛模擬資料，方便看 dashboard / 分頁
 ```
+
+**pnpm（Node 20 內建 corepack 可用）：**
+```bash
+cp .env.example .env
+docker compose up -d
+pnpm install                  # 安裝所有 workspace 依賴
+npm run db:migrate            # db 指令仍透過 npm 執行
+npm run seed
+```
+
+> pnpm 相關設定在 `pnpm-workspace.yaml` 與 `.npmrc`。日常開發指令（dev、test、db:*）均沿用 `npm run`。
 
 ## 日常啟動
 

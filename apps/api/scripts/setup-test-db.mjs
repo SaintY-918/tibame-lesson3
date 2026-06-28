@@ -45,6 +45,7 @@ try {
 // 2) 套用所有 migrations（非破壞性，與正式 schema 流程一致）。
 const result = spawnSync("npx", ["prisma", "migrate", "deploy"], {
   stdio: "inherit",
+  shell: true,
   env: { ...process.env, DATABASE_URL: testUrl },
 });
 process.exit(result.status ?? 1);
